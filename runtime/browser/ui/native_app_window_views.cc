@@ -4,15 +4,24 @@
 
 #include "xwalk/runtime/browser/ui/native_app_window_views.h"
 
+#include "content/public/browser/context_factory.h"
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/web_contents.h"
+#include "ui/aura/window.h"
 #include "ui/gfx/screen.h"
 #include "ui/views/controls/webview/webview.h"
-#include "ui/views/widget/desktop_aura/desktop_screen.h"
 #include "ui/views/widget/widget.h"
 #include "xwalk/runtime/browser/ui/top_view_layout_views.h"
 #include "xwalk/runtime/browser/ui/xwalk_views_delegate.h"
 #include "xwalk/runtime/common/xwalk_notification_types.h"
+
+#if defined(OS_CHROMEOS)
+#include "chromeos/dbus/dbus_thread_manager.h"
+#include "ui/aura/test/test_screen.h"
+#include "ui/wm/test/wm_test_helper.h"
+#else
+#include "ui/views/widget/desktop_aura/desktop_screen.h"
+#endif
 
 #if defined(OS_WIN)
 #include "ui/views/window/native_frame_view.h"
@@ -22,7 +31,14 @@
 #include "xwalk/runtime/browser/ui/native_app_window_tizen.h"
 #endif
 
+#if defined(OS_CHROMEOS)
+wm::WMTestHelper* wm_test_helper_ = NULL;
+#endif
+
 namespace xwalk {
+
+const int kDefaultTestWindowWidthDip = 800;
+const int kDefaultTestWindowHeightDip = 600;
 
 NativeAppWindowViews::NativeAppWindowViews(
     const NativeAppWindow::CreateParams& create_params)
@@ -43,6 +59,41 @@ NativeAppWindowViews::~NativeAppWindowViews() {}
 // e.g. ViewHierarchyChanged().
 void NativeAppWindowViews::Initialize() {
   CHECK(!window_);
+#if defined(OS_CHROMEOS)
+  window_ = views::Widget::CreateWindowWithContextAndBounds(
+      this,
+      wm_test_helper_->GetDefaultParent(NULL, NULL, gfx::Rect()),
+      gfx::Rect(0, 0, kDefaultTestWindowWidthDip, kDefaultTestWindowHeightDip));
+
+  // Call ShowRootWindow on RootWindow created by WMTestHelper without
+  // which XWindow owned by RootWindow doesn't get mapped.
+  window_->GetNativeWindow()->GetHost()->Show();
+  window_->Show();
+
+  // TODO(vignati): essentially Content Shell's SetWebContents. Need to find a
+  // better way to place this in face of the ViewHierarchyChanged
+  {
+    TopViewLayout* layout = new TopViewLayout();
+    SetLayoutManager(layout);
+
+    web_view_ = new views::WebView(web_contents_->GetBrowserContext());
+    web_view_->SetWebContents(web_contents_);
+    web_view_->SetPreferredSize(
+        gfx::Size(kDefaultTestWindowWidthDip, kDefaultTestWindowHeightDip));
+    web_contents_->Focus();
+    AddChildView(web_view_);
+    layout->set_content_view(web_view_);
+
+    // Resize the widget, keeping the same origin.
+    gfx::Rect bounds = GetWidget()->GetWindowBoundsInScreen();
+    bounds.set_size(GetWidget()->GetRootView()->GetPreferredSize());
+    GetWidget()->SetBounds(bounds);
+
+    // Resizing a widget on chromeos doesn't automatically resize the root, need
+    // to explicitly do that.
+    GetWidget()->GetNativeWindow()->GetHost()->SetBounds(bounds);
+  }
+#else
   window_ = new views::Widget;
 
   views::Widget::InitParams params;
@@ -70,6 +121,7 @@ void NativeAppWindowViews::Initialize() {
   window_->SetBounds(bounds);
 #elif !defined(USE_OZONE)
   window_->CenterWindow(create_params_.bounds.size());
+#endif
 #endif
 
   if (create_params_.state == ui::SHOW_STATE_FULLSCREEN)
@@ -253,6 +305,9 @@ void NativeAppWindowViews::ChildPreferredSizeChanged(views::View* child) {
 
 void NativeAppWindowViews::ViewHierarchyChanged(
     const ViewHierarchyChangedDetails& details) {
+#if !defined(OS_CHROMEOS)
+  // TODO(vignatti): this initialization code actually can't reside here. Gotta
+  // find a smarter way to do this just like Content Shell's SetWebContents
   if (details.is_add && details.child == this) {
     TopViewLayout* layout = new TopViewLayout();
     SetLayoutManager(layout);
@@ -262,6 +317,7 @@ void NativeAppWindowViews::ViewHierarchyChanged(
     AddChildView(web_view_);
     layout->set_content_view(web_view_);
   }
+#endif
 }
 
 void NativeAppWindowViews::OnFocus() {
@@ -307,8 +363,19 @@ NativeAppWindow* NativeAppWindow::Create(
 // static
 void NativeAppWindow::Initialize() {
   CHECK(!views::ViewsDelegate::views_delegate);
+#if defined(OS_CHROMEOS)
+  chromeos::DBusThreadManager::Initialize();
+  gfx::Screen::SetScreenInstance(gfx::SCREEN_TYPE_NATIVE,
+                                 aura::TestScreen::Create(gfx::Size()));
+  gfx::Size default_window_size =
+      gfx::Size(kDefaultTestWindowWidthDip, kDefaultTestWindowHeightDip);
+  //TODO(vignatti): I leak these following objects
+  wm_test_helper_ = new wm::WMTestHelper(default_window_size,
+                                         content::GetContextFactory());
+#else
   gfx::Screen::SetScreenInstance(
       gfx::SCREEN_TYPE_NATIVE, views::CreateDesktopScreen());
+#endif
   views::ViewsDelegate::views_delegate = new XWalkViewsDelegate();
 }
 

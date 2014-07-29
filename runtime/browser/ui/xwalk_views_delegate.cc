@@ -50,9 +50,11 @@ void XWalkViewsDelegate::OnBeforeWidgetInit(
       && params->type != views::Widget::InitParams::TYPE_MENU;
 
   if (!params->parent && !params->context) {
+#if !defined(OS_CHROMEOS)
     views::DesktopNativeWidgetAura* native_widget =
         new views::DesktopNativeWidgetAura(delegate);
     params->native_widget = native_widget;
+#endif
   } else if (use_non_toplevel_window) {
     params->native_widget = new views::NativeWidgetAura(delegate);
   }

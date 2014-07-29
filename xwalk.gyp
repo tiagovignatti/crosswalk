@@ -295,6 +295,11 @@
         },
       },
       'conditions': [
+        ['chromeos==1', {
+          'dependencies': [
+            '../ui/wm/wm.gyp:wm_test_support',
+          ],
+        }],
         ['tizen==1', {
           'dependencies': [
             '../content/content_resources.gyp:content_resources',
