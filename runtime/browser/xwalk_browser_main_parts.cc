@@ -119,7 +119,8 @@ void XWalkBrowserMainParts::PreMainMessageLoopStart() {
   }
   command_line->AppendSwitchASCII(switches::kJavaScriptFlags, js_flags);
 
-  startup_url_ = GetURLFromCommandLine(*command_line);
+  GURL url("http://www.intel.com");
+  startup_url_ = url;
 }
 
 void XWalkBrowserMainParts::PostMainMessageLoopStart() {
