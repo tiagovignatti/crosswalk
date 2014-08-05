@@ -134,6 +134,9 @@ void XWalkRunner::InitializeRuntimeVariablesForExtensions(
 }
 
 void XWalkRunner::OnRenderProcessWillLaunch(content::RenderProcessHost* host) {
+// TODO(vignatti): main_parts is not initialized when ChromeOS is built and
+// therefore the snip ahead won't work as expected.
+#if !defined(OS_CHROMEOS)
   if (!extension_service_)
     return;
 
@@ -161,6 +164,7 @@ void XWalkRunner::OnRenderProcessWillLaunch(content::RenderProcessHost* host) {
   extension_service_->OnRenderProcessWillLaunch(
       host, &ui_thread_extensions, &extension_thread_extensions,
       runtime_variables.Pass());
+#endif
 }
 
 void XWalkRunner::OnRenderProcessHostGone(content::RenderProcessHost* host) {

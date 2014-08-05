@@ -16,6 +16,7 @@
 #include "xwalk/runtime/common/xwalk_notification_types.h"
 
 #if defined(OS_CHROMEOS)
+#include "ash/shell.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "ui/aura/test/test_screen.h"
 #include "ui/wm/test/wm_test_helper.h"
@@ -60,11 +61,26 @@ NativeAppWindowViews::~NativeAppWindowViews() {}
 void NativeAppWindowViews::Initialize() {
   CHECK(!window_);
 #if defined(OS_CHROMEOS)
+  // TODO(vignatti):
+  {
+    aura::Window* root_window = ash::Shell::GetPrimaryRootWindow();
+    gfx::Rect screen_rect =
+      gfx::Screen::GetNativeScreen()->GetDisplayNearestWindow(root_window).bounds();
+
+    window_ = new views::Widget();
+    views::Widget::InitParams params;
+    params.delegate = this;
+    params.parent = root_window;
+    window_->Init(params);
+    window_->StackAtTop();
+    window_->SetBounds(screen_rect);
+  }
+#if 0
   window_ = views::Widget::CreateWindowWithContextAndBounds(
       this,
       wm_test_helper_->GetDefaultParent(NULL, NULL, gfx::Rect()),
       gfx::Rect(0, 0, kDefaultTestWindowWidthDip, kDefaultTestWindowHeightDip));
-
+#endif
   // Call ShowRootWindow on RootWindow created by WMTestHelper without
   // which XWindow owned by RootWindow doesn't get mapped.
   window_->GetNativeWindow()->GetHost()->Show();
@@ -91,7 +107,7 @@ void NativeAppWindowViews::Initialize() {
 
     // Resizing a widget on chromeos doesn't automatically resize the root, need
     // to explicitly do that.
-    GetWidget()->GetNativeWindow()->GetHost()->SetBounds(bounds);
+    //GetWidget()->GetNativeWindow()->GetHost()->SetBounds(bounds);
   }
 #else
   window_ = new views::Widget;
